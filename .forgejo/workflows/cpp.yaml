@@ -1,0 +1,66 @@
+name: apply formatting for c++ and check for compilation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: codeberg-tiny
+    if: ${{ startsWith(github.head_ref, 'all/') || startsWith(github.head_ref, 'GUI/') }}
+    container:
+      image: guillaumematton/cicd-zappy:20260601.2
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        timeout-minutes: 2
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          ref: ${{ github.head_ref }}
+
+      - name: install missing deps
+        run: apk add --no-cache libsm-dev libice-dev libx11-dev libxext-dev
+
+      - name: compile
+        run: make zappy_gui
+
+  apply-clang-format:
+    runs-on: codeberg-tiny
+    if: ${{ startsWith(github.head_ref, 'all/') || startsWith(github.head_ref, 'GUI/') }}
+    container:
+      image: guillaumematton/cicd-zappy:20260601.2
+    timeout-minutes: 5
+
+    steps:
+      - name: Set safe directory
+        run: git config --global --add safe.directory $FORGEJO_REPOSITORY
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          ref: ${{ github.head_ref }}
+
+      - name: Apply clang-format
+        run: |
+          find . \( -name '*.cpp' -o -name '*.hpp' \) \
+            ! -path './build/*' \
+            -print0 | xargs -0 clang-format -i
+
+      - name: Commit and push formatting changes
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "style: apply clang-format"
+          git push

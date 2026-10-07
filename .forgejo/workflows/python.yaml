@@ -1,0 +1,68 @@
+name: apply formatting for python and check for compilation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    runs-on: codeberg-tiny
+    if: ${{ startsWith(github.head_ref, 'all/') || startsWith(github.head_ref, 'AI/') }}
+    container:
+      image: guillaumematton/cicd-zappy:20260601.2
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          ref: ${{ github.head_ref }}
+      
+      - name: compile
+        run: make zappy_ai
+
+      - name: install ruff
+        run: pip install --break-system-packages ruff
+      
+      - name: check for issues
+        run: ruff check ai
+
+
+  apply-formatting:
+    runs-on: codeberg-tiny
+    if: ${{ startsWith(github.head_ref, 'all/') || startsWith(github.head_ref, 'AI/') }}
+    container:
+      image: guillaumematton/cicd-zappy:20260601.2
+    timeout-minutes: 5
+    steps:
+      - name: Set safe directory
+        run: git config --global --add safe.directory $FORGEJO_REPOSITORY
+
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          ref: ${{ github.head_ref }}
+        
+      - name: install ruff
+        run: pip install --break-system-packages ruff
+      
+      - name: apply format
+        run: ruff format ai
+
+      - name: Commit and push formatting changes
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "style: apply ruff format"
+          git push

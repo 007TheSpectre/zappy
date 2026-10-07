@@ -1,0 +1,9 @@
+target/
+build/
+zappy_*
+usr
+#zappy_ai
+__pycache__
+ai/.venv
+ai/venv_install.log
+*.log
